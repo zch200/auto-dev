@@ -1,0 +1,13 @@
+{
+  "phases": [
+    {
+      "slug": "db-schema",
+      "order": 1,
+      "title": "Test",
+      "summary": "Test",
+      "acceptance_criteria": ["Test"],
+      "status": "pending",
+      "attempts": 0
+    }
+  ]
+}

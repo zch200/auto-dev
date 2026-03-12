@@ -1,0 +1,18 @@
+{
+  "phases": [
+    {
+      "slug": "phase-a",
+      "order": 1,
+      "title": "Phase A",
+      "summary": "Summary A",
+      "acceptance_criteria": ["Criteria A"]
+    },
+    {
+      "slug": "phase-b",
+      "order": 1,
+      "title": "Phase B",
+      "summary": "Summary B",
+      "acceptance_criteria": ["Criteria B"]
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "base_branch": "dev",
+  "quality_gate": { "test": "npm test" },
+  "session_timeout_minutes": -5
+}

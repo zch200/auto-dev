@@ -1,0 +1,13 @@
+{
+  "base_branch": "dev",
+  "quality_gate": {
+    "typecheck": "npx tsc --noEmit",
+    "test": "npx vitest run"
+  },
+  "setup_commands": ["npm ci"],
+  "session_timeout_minutes": 20,
+  "setup_timeout_minutes": 5,
+  "gate_timeout_minutes": 10,
+  "max_attempts_per_phase": 3,
+  "max_turns": 200
+}

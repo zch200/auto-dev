@@ -1,0 +1,6 @@
+{
+  "base_branch": "main",
+  "quality_gate": {
+    "typecheck": "npx tsc --noEmit"
+  }
+}
