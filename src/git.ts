@@ -8,6 +8,7 @@ function gitExec(args: string[], cwd: string): string {
   return execFileSync('git', args, {
     cwd,
     encoding: 'utf-8',
+    stdio: ['pipe', 'pipe', 'pipe'],
     env: { ...process.env, ...GIT_ENV },
   }).trim()
 }
