@@ -335,7 +335,7 @@ describe('orchestrator E2E', () => {
     expect(manifest!.phases[1].status).toBe('completed')
   }, 30_000)
 
-  it('should fail after max attempts when setup command fails', async () => {
+  it('should tolerate setup command failure on first phase (no completed phases)', async () => {
     repo = setupRepo()
     // Override config with a failing setup command
     repo.writeFile(
@@ -356,7 +356,9 @@ describe('orchestrator E2E', () => {
     mock = createMockClaudeWithSequence([
       'ok',                // preflight
       'session0-success',  // Session 0
-      // No phase execution — setup fails before Claude session starts
+      // Setup fails but is tolerated — Claude session runs with 'ok' (no-op)
+      // Attempt 1: 'ok' (default) → no commits → no-op failure
+      // Attempt 2: 'ok' (default) → no commits → no-op failure
     ])
     originalPath = injectMockPath(mock.dir)
 
@@ -367,7 +369,51 @@ describe('orchestrator E2E', () => {
     const manifest = readManifest(paths.manifestPath(repo.dir, 'test-plan'))
     expect(manifest!.phases[0].status).toBe('failed')
     expect(manifest!.phases[0].attempts).toBe(2)
-    expect(manifest!.phases[0].last_error).toContain('Setup command failed')
+    // Phase proceeds past setup failure but Claude session produces no work
+    expect(manifest!.phases[0].last_error).toContain('没有产生任何新 commit')
+  }, 30_000)
+
+  it('should fail on setup command failure when prior phases completed', async () => {
+    repo = setupRepo()
+    repo.writeFile(
+      '.auto-dev.json',
+      JSON.stringify({
+        base_branch: 'main',
+        quality_gate: { typecheck: 'true', test: 'true' },
+        setup_commands: ['false'],  // always fails with exit 1
+        session_timeout_minutes: 1,
+        setup_timeout_minutes: 1,
+        gate_timeout_minutes: 1,
+        max_attempts_per_phase: 2,
+      }),
+    )
+    repo.git('add', '.auto-dev.json')
+    repo.git('commit', '-m', 'config with failing setup')
+
+    // Phase A succeeds (setup_commands overridden in mock by succeeding anyway)
+    // then Phase B fails because setup fails with completed phases
+    mock = createMockClaudeWithSequence([
+      'ok',                    // preflight
+      'session0-two-phases',   // Session 0 — two phases
+      'phase-success',         // Phase A session
+      'verify-pass',           // Phase A verification
+      // Phase B: setup fails — now fatal because Phase A completed
+    ])
+    originalPath = injectMockPath(mock.dir)
+
+    // For Phase A to succeed, we need setup to pass. Override setup_commands
+    // to succeed for Phase A and fail for Phase B by manipulating the config.
+    // Since we can't do that easily, instead test the simpler scenario:
+    // Manually set up a manifest with phase A completed, then run Phase B.
+    const exitCode = await orchestrate(makeCliArgs(repo))
+
+    // Phase A will also be tolerated (no completed phases) → proceeds to session
+    // Phase A mock 'phase-success' creates a commit → gates pass → completes
+    // Phase B: now has completed phases → setup failure is fatal
+    const manifest = readManifest(paths.manifestPath(repo.dir, 'test-plan'))
+    expect(manifest!.phases[0].status).toBe('completed')
+    expect(manifest!.phases[1].status).toBe('failed')
+    expect(manifest!.phases[1].last_error).toContain('Setup command failed')
   }, 30_000)
 
   it('should return correct exit code on config error', async () => {

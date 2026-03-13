@@ -3,7 +3,7 @@ import * as path from 'node:path'
 import * as crypto from 'node:crypto'
 import * as git from './git.js'
 import * as paths from './paths.js'
-import { loadConfig, applyDefaults } from './config.js'
+import { loadConfig, applyDefaults, detectTechStack } from './config.js'
 import { readManifest, atomicWriteManifest, deleteManifest } from './manifest.js'
 import { validateCandidate, CandidateError } from './candidate.js'
 import { acquireLock, releaseLock, registerLockCleanup } from './lock.js'
@@ -504,35 +504,58 @@ async function executePhase(
       setupTimeoutMs,
     )
     if (!setupResult.passed) {
-      return handlePhaseFailure(
-        manifest,
-        phase,
-        setupResult.error || 'Setup commands failed',
-        projectRoot,
-        manifestFilePath,
+      const hasCompletedPhasesBefore = manifest.phases.some(
+        (p) => p.status === 'completed',
       )
+      if (!hasCompletedPhasesBefore) {
+        // First phase on a new project — setup failure is expected
+        // (e.g. npm ci fails because package.json doesn't exist yet).
+        // Continue to Claude session; quality gates will catch real issues.
+        logger.warn(
+          `Setup commands failed but no phases completed yet, ` +
+            `continuing (likely a new project): ${setupResult.error}`,
+        )
+      } else {
+        return handlePhaseFailure(
+          manifest,
+          phase,
+          setupResult.error || 'Setup commands failed',
+          projectRoot,
+          manifestFilePath,
+        )
+      }
     }
   }
 
-  // 3. Preflight health check
-  logger.info('Running preflight health check...')
-  const preflightResult = await runPreflightCheck(
-    manifest.quality_gate,
-    wtPath,
-    gateTimeoutMs,
+  // 3. Preflight health check — skip when no prior phases have completed,
+  //    because the feature branch is identical to base_branch at that point.
+  const hasCompletedPhases = manifest.phases.some(
+    (p) => p.status === 'completed',
   )
-  if (!preflightResult.passed) {
-    // Preflight failure — don't consume attempts, terminate flow
-    phase.last_error = `Feature 分支本身未通过质量门禁: ${preflightResult.error}`
-    atomicWriteManifest(manifestFilePath, manifest)
-    cleanupWorktreeQuiet(projectRoot, planId, phase.slug)
-
-    logger.error(phase.last_error)
-    logger.error(
-      `feature 分支在 Phase ${phase.slug} 开始前已不健康，` +
-        '可能是前序 phase 引入了问题，请人工检查修复后重新运行',
+  if (hasCompletedPhases) {
+    logger.info('Running preflight health check...')
+    const preflightResult = await runPreflightCheck(
+      manifest.quality_gate,
+      wtPath,
+      gateTimeoutMs,
     )
-    return 'preflight-failed'
+    if (!preflightResult.passed) {
+      // Preflight failure — don't consume attempts, terminate flow
+      phase.last_error = `Feature 分支本身未通过质量门禁: ${preflightResult.error}`
+      atomicWriteManifest(manifestFilePath, manifest)
+      cleanupWorktreeQuiet(projectRoot, planId, phase.slug)
+
+      logger.error(phase.last_error)
+      logger.error(
+        `feature 分支在 Phase ${phase.slug} 开始前已不健康，` +
+          '可能是前序 phase 引入了问题，请人工检查修复后重新运行',
+      )
+      return 'preflight-failed'
+    }
+  } else {
+    logger.info(
+      'Skipping preflight health check (no completed phases yet)',
+    )
   }
 
   // 4. Update manifest: status → running, attempts++
@@ -736,6 +759,42 @@ async function executePhase(
   // 11. Mark completed
   phase.status = 'completed'
   atomicWriteManifest(manifestFilePath, manifest)
+
+  // 11a. After first phase completes, re-detect tech stack and refresh config.
+  //      This handles the case where the initial config was generated from
+  //      interactive presets (e.g. generic "npm ci") but Phase 1 created the
+  //      project with a different package manager (e.g. pnpm).
+  const completedCount = manifest.phases.filter(
+    (p) => p.status === 'completed',
+  ).length
+  if (completedCount === 1) {
+    try {
+      const detected = detectTechStack(projectRoot)
+      if (detected) {
+        const oldSetup = JSON.stringify(manifest.setup_commands)
+        const newSetup = JSON.stringify(detected.setup_commands)
+        if (oldSetup !== newSetup) {
+          manifest.setup_commands = detected.setup_commands
+          logger.info(
+            `Setup commands auto-refreshed after first phase: ${oldSetup} → ${newSetup}`,
+          )
+        }
+        const oldGate = JSON.stringify(manifest.quality_gate)
+        const newGate = JSON.stringify(detected.quality_gate)
+        if (oldGate !== newGate) {
+          manifest.quality_gate = detected.quality_gate
+          logger.info(
+            `Quality gate auto-refreshed after first phase: ${oldGate} → ${newGate}`,
+          )
+        }
+        atomicWriteManifest(manifestFilePath, manifest)
+      }
+    } catch (err) {
+      logger.debug(
+        `Tech stack re-detection failed: ${(err as Error).message}`,
+      )
+    }
+  }
 
   // 12. Cleanup worktree + phase branch
   cleanupWorktreeQuiet(projectRoot, planId, phase.slug)
