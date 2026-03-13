@@ -32,7 +32,7 @@ npx vitest run tests/unit/config.test.ts
 npm run test:coverage
 
 # Run the tool directly (without building)
-npx tsx src/index.ts start <project-root> --plan <plan-doc>
+npx tsx src/index.ts start --plan <plan-doc>
 ```
 
 ## Architecture

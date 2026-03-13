@@ -67,6 +67,12 @@ export function parseArgs(argv: string[]): CliArgs {
         throw new CliError('--plan requires a value')
       }
       planDocPath = args[i]
+    } else if (arg === '--project') {
+      i++
+      if (i >= args.length) {
+        throw new CliError('--project requires a value')
+      }
+      projectRoot = args[i]
     } else if (arg === '--reset') {
       reset = true
     } else if (arg === '--retry') {
@@ -74,7 +80,7 @@ export function parseArgs(argv: string[]): CliArgs {
     } else if (arg === '--dry-run') {
       dryRun = true
     } else if (!arg.startsWith('-')) {
-      projectRoot = arg
+      throw new CliError(`Unknown argument: ${arg}`)
     } else {
       throw new CliError(`Unknown option: ${arg}`)
     }
@@ -82,9 +88,9 @@ export function parseArgs(argv: string[]): CliArgs {
     i++
   }
 
-  // Validate required args
+  // Default projectRoot to cwd
   if (!projectRoot) {
-    throw new CliError('Project root path is required')
+    projectRoot = process.cwd()
   }
 
   if (!planDocPath) {
@@ -149,18 +155,19 @@ export function printUsage(): void {
 auto-dev - Automated development orchestration tool
 
 Usage:
-  auto-dev start <project-root> --plan <plan-doc> [options]
-  auto-dev status <project-root> --plan <plan-doc>
+  auto-dev start --plan <plan-doc> [options]
+  auto-dev status --plan <plan-doc>
 
 Commands:
   start     Start or resume plan execution
   status    Show current plan execution status
 
 Options:
-  --plan <path>   Path to the plan document (required)
-  --reset         Clear all state and restart from scratch
-  --retry         Reset failed phases and retry with refreshed config
-  --dry-run       Only run Session 0, show extracted phases, don't execute
+  --plan <path>      Path to the plan document (required)
+  --project <path>   Project root directory (default: current working directory)
+  --reset            Clear all state and restart from scratch
+  --retry            Reset failed phases and retry with refreshed config
+  --dry-run          Only run Session 0, show extracted phases, don't execute
 `.trim()
   console.log(usage)
 }

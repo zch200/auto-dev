@@ -35,9 +35,7 @@ feat/{plan_id} 分支 (等待人工合并到主分支)
 ## 安装
 
 ```bash
-git clone https://github.com/zch200/auto-dev.git
-cd auto-dev
-npm install
+npm i -g auto-dev-cc
 ```
 
 ## 快速开始
@@ -74,8 +72,10 @@ npm install
 
 ### 3. 试运行
 
+在目标项目根目录下运行：
+
 ```bash
-npx tsx src/index.ts start ./path/to/project --plan .claude/plans/v2.1.0.md --dry-run
+auto-dev-cc start --plan .claude/plans/v2.1.0.md --dry-run
 ```
 
 确认 Phase 拆分和 slug 命名合理后再正式执行。
@@ -83,7 +83,7 @@ npx tsx src/index.ts start ./path/to/project --plan .claude/plans/v2.1.0.md --dr
 ### 4. 正式执行
 
 ```bash
-npx tsx src/index.ts start ./path/to/project --plan .claude/plans/v2.1.0.md
+auto-dev-cc start --plan .claude/plans/v2.1.0.md
 ```
 
 ## 命令参考
@@ -91,13 +91,13 @@ npx tsx src/index.ts start ./path/to/project --plan .claude/plans/v2.1.0.md
 ### start — 启动或恢复计划执行
 
 ```bash
-auto-dev start <project-root> --plan <plan-doc> [--dry-run] [--retry] [--reset]
+auto-dev-cc start --plan <plan-doc> [--project <path>] [--dry-run] [--retry] [--reset]
 ```
 
 | 参数 | 说明 |
 |------|------|
-| `<project-root>` | 目标项目的根目录路径（必须是 git 仓库） |
 | `--plan <path>` | 计划文档路径，文件名即 plan_id（如 `v2.1.0.md` → `v2.1.0`） |
+| `--project <path>` | 目标项目根目录（默认为当前工作目录） |
 | `--dry-run` | 只运行 Session 0 解析计划，展示 phase 结构，不执行 |
 | `--retry` | 重试失败的 phase，自动刷新配置（计划文档不能改动） |
 | `--reset` | 清理所有状态（分支、worktree、manifest），从头开始 |
@@ -105,7 +105,7 @@ auto-dev start <project-root> --plan <plan-doc> [--dry-run] [--retry] [--reset]
 ### status — 查看执行状态
 
 ```bash
-auto-dev status <project-root> --plan <plan-doc>
+auto-dev-cc status --plan <plan-doc>
 ```
 
 可在另一个终端运行，实时查看当前进度。输出示例：
@@ -145,10 +145,10 @@ base_branch (如 dev)
 
 ```bash
 # 终端 1
-auto-dev start ./project --plan .claude/plans/v2.1.0.md
+auto-dev-cc start --plan .claude/plans/v2.1.0.md
 
 # 终端 2
-auto-dev start ./project --plan .claude/plans/refactor-auth.md
+auto-dev-cc start --plan .claude/plans/refactor-auth.md
 ```
 
 ## 退出码

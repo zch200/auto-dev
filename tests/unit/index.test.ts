@@ -70,7 +70,7 @@ describe('CLI parseArgs', () => {
     const dir = setupRepo()
     const planPath = path.join(dir, '.claude/plans/v2.1.0.md')
 
-    const args = parseArgs(['node', 'index.ts', 'start', dir, '--plan', planPath])
+    const args = parseArgs(['node', 'index.ts', 'start', '--project', dir, '--plan', planPath])
 
     expect(args.command).toBe('start')
     expect(args.projectRoot).toBe(path.resolve(dir))
@@ -81,11 +81,20 @@ describe('CLI parseArgs', () => {
     expect(args.dryRun).toBe(false)
   })
 
+  it('should default projectRoot to cwd when --project is omitted', () => {
+    const dir = setupRepo()
+    const planPath = path.join(dir, '.claude/plans/v2.1.0.md')
+
+    const args = parseArgs(['node', 'index.ts', 'start', '--plan', planPath])
+
+    expect(args.projectRoot).toBe(process.cwd())
+  })
+
   it('should parse status command', () => {
     const dir = setupRepo()
     const planPath = path.join(dir, '.claude/plans/v2.1.0.md')
 
-    const args = parseArgs(['node', 'index.ts', 'status', dir, '--plan', planPath])
+    const args = parseArgs(['node', 'index.ts', 'status', '--project', dir, '--plan', planPath])
 
     expect(args.command).toBe('status')
   })
@@ -95,7 +104,7 @@ describe('CLI parseArgs', () => {
     const planPath = path.join(dir, '.claude/plans/v2.1.0.md')
 
     const args = parseArgs([
-      'node', 'index.ts', 'start', dir, '--plan', planPath, '--reset',
+      'node', 'index.ts', 'start', '--project', dir, '--plan', planPath, '--reset',
     ])
 
     expect(args.reset).toBe(true)
@@ -107,7 +116,7 @@ describe('CLI parseArgs', () => {
     const planPath = path.join(dir, '.claude/plans/v2.1.0.md')
 
     const args = parseArgs([
-      'node', 'index.ts', 'start', dir, '--plan', planPath, '--retry',
+      'node', 'index.ts', 'start', '--project', dir, '--plan', planPath, '--retry',
     ])
 
     expect(args.retry).toBe(true)
@@ -119,7 +128,7 @@ describe('CLI parseArgs', () => {
     const planPath = path.join(dir, '.claude/plans/v2.1.0.md')
 
     const args = parseArgs([
-      'node', 'index.ts', 'start', dir, '--plan', planPath, '--dry-run',
+      'node', 'index.ts', 'start', '--project', dir, '--plan', planPath, '--dry-run',
     ])
 
     expect(args.dryRun).toBe(true)
@@ -135,15 +144,9 @@ describe('CLI parseArgs', () => {
 
   it('should throw on missing --plan', () => {
     const dir = setupRepo()
-    expect(() => parseArgs(['node', 'index.ts', 'start', dir])).toThrow(
+    expect(() => parseArgs(['node', 'index.ts', 'start', '--project', dir])).toThrow(
       /--plan is required/,
     )
-  })
-
-  it('should throw on missing project root', () => {
-    expect(() =>
-      parseArgs(['node', 'index.ts', 'start', '--plan', 'some.md']),
-    ).toThrow(/Project root/)
   })
 
   it('should throw when --reset and --retry used together', () => {
@@ -152,7 +155,7 @@ describe('CLI parseArgs', () => {
 
     expect(() =>
       parseArgs([
-        'node', 'index.ts', 'start', dir, '--plan', planPath,
+        'node', 'index.ts', 'start', '--project', dir, '--plan', planPath,
         '--reset', '--retry',
       ]),
     ).toThrow(/cannot be used together/)
@@ -164,7 +167,7 @@ describe('CLI parseArgs', () => {
 
     expect(() =>
       parseArgs([
-        'node', 'index.ts', 'start', dir, '--plan', planPath,
+        'node', 'index.ts', 'start', '--project', dir, '--plan', planPath,
         '--dry-run', '--reset',
       ]),
     ).toThrow(/cannot be used with/)
@@ -176,7 +179,7 @@ describe('CLI parseArgs', () => {
 
     expect(() =>
       parseArgs([
-        'node', 'index.ts', 'status', dir, '--plan', planPath, '--reset',
+        'node', 'index.ts', 'status', '--project', dir, '--plan', planPath, '--reset',
       ]),
     ).toThrow(/does not support/)
   })
@@ -190,14 +193,14 @@ describe('CLI parseArgs', () => {
     const planPath = path.join(repo.dir, '.claude/plans/invalid name.md')
 
     expect(() =>
-      parseArgs(['node', 'index.ts', 'start', repo.dir, '--plan', planPath]),
+      parseArgs(['node', 'index.ts', 'start', '--project', repo.dir, '--plan', planPath]),
     ).toThrow(/命名规范/)
   })
 
   it('should throw on non-existent project root', () => {
     expect(() =>
       parseArgs([
-        'node', 'index.ts', 'start', '/nonexistent/path',
+        'node', 'index.ts', 'start', '--project', '/nonexistent/path',
         '--plan', '/some/plan.md',
       ]),
     ).toThrow(/does not exist/)
@@ -207,7 +210,7 @@ describe('CLI parseArgs', () => {
     const dir = setupRepo()
     expect(() =>
       parseArgs([
-        'node', 'index.ts', 'start', dir,
+        'node', 'index.ts', 'start', '--project', dir,
         '--plan', path.join(dir, 'nonexistent.md'),
       ]),
     ).toThrow(/does not exist/)
@@ -218,8 +221,17 @@ describe('CLI parseArgs', () => {
     const planPath = path.join(dir, '.claude/plans/v2.1.0.md')
 
     expect(() =>
-      parseArgs(['node', 'index.ts', 'start', dir, '--plan', planPath, '--unknown']),
+      parseArgs(['node', 'index.ts', 'start', '--project', dir, '--plan', planPath, '--unknown']),
     ).toThrow(/Unknown option/)
+  })
+
+  it('should throw on positional argument', () => {
+    const dir = setupRepo()
+    const planPath = path.join(dir, '.claude/plans/v2.1.0.md')
+
+    expect(() =>
+      parseArgs(['node', 'index.ts', 'start', dir, '--plan', planPath]),
+    ).toThrow(/Unknown argument/)
   })
 
   it('should derive correct plan_id from filename', () => {
@@ -231,7 +243,7 @@ describe('CLI parseArgs', () => {
     const planPath = path.join(repo.dir, '.claude/plans/refactor-auth.md')
 
     const args = parseArgs([
-      'node', 'index.ts', 'start', repo.dir, '--plan', planPath,
+      'node', 'index.ts', 'start', '--project', repo.dir, '--plan', planPath,
     ])
 
     expect(args.planId).toBe('refactor-auth')
