@@ -269,12 +269,19 @@ export async function main(argv: string[] = process.argv): Promise<number> {
 }
 
 // Run if this is the main module
-const isMainModule =
-  typeof process !== 'undefined' &&
-  process.argv[1] &&
-  (process.argv[1].endsWith('/index.ts') ||
-    process.argv[1].endsWith('/index.js'))
+import { fileURLToPath } from 'node:url'
+import { realpathSync } from 'node:fs'
 
-if (isMainModule) {
+function detectMainModule(): boolean {
+  try {
+    const thisFile = realpathSync(fileURLToPath(import.meta.url))
+    const argFile = realpathSync(process.argv[1])
+    return thisFile === argFile
+  } catch {
+    return false
+  }
+}
+
+if (detectMainModule()) {
   main().then((code) => process.exit(code))
 }
