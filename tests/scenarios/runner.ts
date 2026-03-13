@@ -220,6 +220,7 @@ function readManifest(tempDir: string): Record<string, unknown> | null {
 
 function collectAndAssert(
   tempDir: string,
+  scenarioDir: string,
   config: ScenarioConfig,
   exitCode: number | null,
 ): { phaseResults: PhaseCheckResult[]; assertionResults: AssertionResult[] } {
@@ -303,6 +304,19 @@ function collectAndAssert(
           passed: phases.some((p) => p.status === 'failed'),
           detail: phases.map((p) => `${p.slug}:${p.status}`).join(', ') || 'no phases',
         }
+
+      case 'config_refreshed': {
+        // Check that manifest.setup_commands differs from the original config.json
+        const origConfigPath = path.join(scenarioDir, 'config.json')
+        const origConfig = JSON.parse(fs.readFileSync(origConfigPath, 'utf-8'))
+        const origSetup = JSON.stringify(origConfig.setup_commands ?? [])
+        const currentSetup = JSON.stringify((manifest?.setup_commands as string[]) ?? [])
+        return {
+          name: assertion,
+          passed: manifest !== null && origSetup !== currentSetup,
+          detail: `${origSetup} → ${currentSetup}`,
+        }
+      }
 
       default:
         return { name: assertion, passed: false, detail: `unknown assertion: ${assertion}` }
@@ -418,7 +432,7 @@ async function runScenario(name: string): Promise<ScenarioResult> {
     log(`auto-dev exited with code ${exitCode}`)
 
     // 3. Collect & Assert
-    const { phaseResults, assertionResults } = collectAndAssert(tempDir, config, exitCode)
+    const { phaseResults, assertionResults } = collectAndAssert(tempDir, scenarioDir, config, exitCode)
 
     const exitCodePassed = exitCode === config.expected_exit_code
     const phasesPassed = phaseResults.every((pr) => pr.passed)
