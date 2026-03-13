@@ -11,6 +11,46 @@ export class WorktreeError extends Error {
   }
 }
 
+// Patterns injected into .git/info/exclude to prevent build artifacts
+// from being staged by `git add -A` in the auto-commit gate.
+const GIT_EXCLUDE_PATTERNS = [
+  'node_modules/',
+  'dist/',
+  '.vite/',
+  '*.tsbuildinfo',
+  'coverage/',
+]
+
+/**
+ * Ensure common build-artifact patterns are listed in .git/info/exclude.
+ * This prevents `git add -A` from staging node_modules, build caches, etc.
+ * Uses the shared git exclude file (not .gitignore) to avoid modifying the project.
+ */
+function ensureGitExcludePatterns(projectRoot: string): void {
+  const commonDirRel = git.gitCommonDir(projectRoot)
+  const commonDir = path.resolve(projectRoot, commonDirRel)
+  const excludePath = path.join(commonDir, 'info', 'exclude')
+
+  fs.mkdirSync(path.dirname(excludePath), { recursive: true })
+
+  let existing = ''
+  try {
+    existing = fs.readFileSync(excludePath, 'utf-8')
+  } catch { /* file may not exist */ }
+
+  const missing = GIT_EXCLUDE_PATTERNS.filter((p) => !existing.includes(p))
+  if (missing.length === 0) return
+
+  const needsNewline = existing.length > 0 && !existing.endsWith('\n')
+  const block =
+    (needsNewline ? '\n' : '') +
+    '# auto-dev: prevent build artifacts from being tracked\n' +
+    missing.join('\n') + '\n'
+
+  fs.appendFileSync(excludePath, block)
+  logger.debug(`Added ${missing.length} exclude pattern(s) to ${excludePath}`)
+}
+
 /**
  * Create a worktree for a phase execution.
  * git worktree add {path} -b phase/{plan_id}/{slug} {startPoint}
@@ -23,6 +63,26 @@ export function createWorktree(
 ): string {
   const wtPath = worktreePath(projectRoot, planId, slug)
   const branch = phaseBranch(planId, slug)
+
+  // Clean up stale worktree from previous run (e.g. --no-cleanup or killed process)
+  if (fs.existsSync(wtPath)) {
+    logger.warn(`Stale worktree directory found, cleaning up: ${wtPath}`)
+    try {
+      git.removeWorktree(wtPath, projectRoot)
+    } catch { /* ok */ }
+    if (fs.existsSync(wtPath)) {
+      fs.rmSync(wtPath, { recursive: true, force: true })
+    }
+  }
+
+  // Clean up stale phase branch if exists
+  if (git.branchExists(branch, projectRoot)) {
+    logger.warn(`Stale phase branch found, deleting: ${branch}`)
+    git.deleteBranch(branch, projectRoot)
+  }
+
+  // Ensure build artifacts are excluded from git tracking
+  ensureGitExcludePatterns(projectRoot)
 
   // Ensure parent directory exists
   fs.mkdirSync(path.dirname(wtPath), { recursive: true })
