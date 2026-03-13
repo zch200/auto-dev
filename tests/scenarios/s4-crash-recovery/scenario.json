@@ -1,0 +1,14 @@
+{
+  "name": "s4-crash-recovery",
+  "description": "Resume from a crashed run with a phase stuck in 'running' status",
+  "priority": 1,
+  "timeout_minutes": 5,
+  "expected_exit_code": 0,
+  "expected_phase_count": 1,
+  "expected_all_phases_status": "completed",
+  "assertions": [
+    "setup_commands_succeeded",
+    "quality_gates_passed",
+    "verification_passed"
+  ]
+}

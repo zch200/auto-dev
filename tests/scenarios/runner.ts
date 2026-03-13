@@ -14,6 +14,7 @@
 
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import * as crypto from 'node:crypto'
 import { execFileSync, spawn } from 'node:child_process'
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -137,7 +138,48 @@ function setupScenario(scenarioDir: string, config: ScenarioConfig): string {
     fs.copyFileSync(planSrc, path.join(tempDir, 'plan.md'))
   }
 
+  // Pre-manifest: simulate a pre-existing run state (e.g. crash recovery)
+  const preManifestSrc = path.join(scenarioDir, 'pre_manifest.json')
+  if (fs.existsSync(preManifestSrc)) {
+    setupPreManifest(tempDir, preManifestSrc)
+  }
+
   return tempDir
+}
+
+/**
+ * Place a pre-built manifest and create the feature branch.
+ * Supports placeholder replacement:
+ *   {{BASE_SHA}}      → SHA of current HEAD (main branch tip)
+ *   {{PLAN_DOC_HASH}} → sha256 of plan.md content
+ */
+function setupPreManifest(tempDir: string, preManifestPath: string): void {
+  const baseSha = git(tempDir, 'rev-parse', 'HEAD')
+
+  // Compute plan doc hash
+  const planPath = path.join(tempDir, 'plan.md')
+  const planContent = fs.existsSync(planPath) ? fs.readFileSync(planPath, 'utf-8') : ''
+  const planDocHash = crypto.createHash('sha256').update(planContent).digest('hex')
+
+  // Read and replace placeholders
+  let content = fs.readFileSync(preManifestPath, 'utf-8')
+  content = content.replaceAll('{{BASE_SHA}}', baseSha)
+  content = content.replaceAll('{{PLAN_DOC_HASH}}', planDocHash)
+
+  const manifest = JSON.parse(content)
+
+  // Create feature branch from main
+  git(tempDir, 'branch', manifest.feature_branch)
+
+  // Write manifest to git runtime dir
+  const manifestDir = path.join(tempDir, '.git', 'auto-dev', 'manifests')
+  fs.mkdirSync(manifestDir, { recursive: true })
+  fs.writeFileSync(
+    path.join(manifestDir, `${manifest.plan_id}.json`),
+    JSON.stringify(manifest, null, 2),
+  )
+
+  log(`Pre-manifest placed: ${manifest.phases.length} phase(s), feature branch: ${manifest.feature_branch}`)
 }
 
 // ── Execute ──────────────────────────────────────────────────────────
