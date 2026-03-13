@@ -32,22 +32,24 @@ auto-dev 的现有测试体系（unit / integration / e2e）使用 mock Claude C
 - 测试创建的 `phase/*`、`feat/*` 分支会污染 auto-dev 本身的分支空间
 - worktree 操作会在 auto-dev 的 `.git/worktrees/` 下创建条目
 
-**解决方案**：仓库内只存 seed 文件和 scenario 配置，runner 动态构建独立 git repo：
+**解决方案**：仓库内只存 seed 文件和 scenario 配置，runner 在项目同级目录动态构建独立 git repo：
 
 ```
-仓库内（版本控制）                              运行时（临时，/tmp）
-tests/scenarios/s1-happy-path/seed/    ──复制──▶  /tmp/auto-dev-scenarios/s1-happy-path/
+仓库内（版本控制）                              运行时（临时，同级目录）
+tests/scenarios/s1-happy-path/seed/    ──复制──▶  ../auto-dev-scenarios/s1-happy-path/
   ├── package.json                                  ├── .git/          ← runner 执行 git init
   ├── tsconfig.json                                 ├── .auto-dev.json ← runner 从 config.json 复制
   └── src/index.ts                                  ├── package.json
                                                     └── src/index.ts
                                                          ↓
-                                              auto-dev start --plan ... --project /tmp/.../
+                                              auto-dev start --plan ... --project ../auto-dev-scenarios/.../
                                                          ↓
                                                     完成后清理整个临时目录
 ```
 
-与现有 E2E 测试的 `fs.mkdtempSync()` 模式一致，只是 seed 内容更丰富。
+临时目录放在项目同级（而非 /tmp）的好处：路径短、调试时方便查看中间状态。
+runner 结束后清理整个 `../auto-dev-scenarios/` 目录，不留残留。
+该目录已加入 `.gitignore`，不会被意外提交。
 
 ## Test Priority Levels
 
@@ -130,8 +132,8 @@ tests/scenarios/
 
 ## runner.ts Responsibilities
 
-1. **Setup** — 复制 seed/ 到 `/tmp/auto-dev-scenarios/{name}/`，`git init` + initial commit，写入 .auto-dev.json
-2. **Execute** — `env -u CLAUDECODE npx tsx src/index.ts start --plan ...` with timeout
+1. **Setup** — 复制 seed/ 到 `../auto-dev-scenarios/{name}/`，`git init` + initial commit，写入 .auto-dev.json + plan.md
+2. **Execute** — `env -u CLAUDECODE npx tsx src/index.ts start --plan ... --project ../auto-dev-scenarios/{name}/` with timeout
 3. **Collect** — 读取 manifest、orchestrator.log、exit code
 4. **Assert** — 比对 scenario.json 中的预期
 5. **Cleanup** — 删除临时目录、worktree、branches
