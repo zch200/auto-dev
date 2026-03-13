@@ -1,0 +1,61 @@
+{
+  "plan_id": "plan",
+  "plan_doc": "plan.md",
+  "plan_doc_hash": "{{PLAN_DOC_HASH}}",
+  "feature_branch": "feat/plan",
+  "base_branch": "main",
+  "quality_gate": {
+    "typecheck": "npx tsc --noEmit",
+    "test": "npx vitest run"
+  },
+  "setup_commands": ["npm install"],
+  "session_timeout_minutes": 20,
+  "setup_timeout_minutes": 5,
+  "gate_timeout_minutes": 10,
+  "max_attempts_per_phase": 3,
+  "max_turns": 200,
+  "total_tokens": { "input": 500, "output": 200 },
+  "total_cost_usd": 0.05,
+  "phases": [
+    {
+      "slug": "add-string-utilities",
+      "order": 1,
+      "title": "Add string utilities",
+      "summary": "Create string-utils.ts with capitalize and reverse functions",
+      "acceptance_criteria": [
+        "src/string-utils.ts exports capitalize and reverse functions",
+        "src/string-utils.test.ts contains tests for both functions",
+        "All tests pass",
+        "TypeScript compilation passes"
+      ],
+      "status": "completed",
+      "attempts": 1,
+      "last_error": null,
+      "feature_base_sha": "{{BASE_SHA}}",
+      "phase_head_sha": "{{BASE_SHA}}",
+      "merged": true,
+      "merge_commit_sha": "{{BASE_SHA}}"
+    },
+    {
+      "slug": "add-text-formatter",
+      "order": 2,
+      "title": "Add text formatter",
+      "summary": "Create formatter.ts that imports string-utils and provides formatTitle and formatSlug",
+      "acceptance_criteria": [
+        "src/formatter.ts imports from string-utils.js and exports formatTitle and formatSlug",
+        "src/formatter.test.ts contains tests for both functions",
+        "All existing tests continue to pass",
+        "TypeScript compilation passes"
+      ],
+      "status": "failed",
+      "attempts": 3,
+      "last_error": "Quality gate failed: test command exited with code 1",
+      "feature_base_sha": "{{BASE_SHA}}",
+      "phase_head_sha": null,
+      "merged": false,
+      "merge_commit_sha": null
+    }
+  ],
+  "created_at": "2026-03-13T00:00:00.000Z",
+  "last_updated": "2026-03-13T00:00:00.000Z"
+}

@@ -1,0 +1,15 @@
+{
+  "name": "s6-retry-resume",
+  "description": "Retry after Phase 2 failure: Phase 1 completed, Phase 2 retried via --retry",
+  "priority": 1,
+  "timeout_minutes": 8,
+  "expected_exit_code": 0,
+  "expected_phase_count": 2,
+  "expected_all_phases_status": "completed",
+  "assertions": [
+    "setup_commands_succeeded",
+    "quality_gates_passed",
+    "verification_passed"
+  ],
+  "cli_args": ["--retry"]
+}

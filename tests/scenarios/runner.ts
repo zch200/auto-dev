@@ -29,6 +29,7 @@ interface ScenarioConfig {
   expected_all_phases_status?: string
   expected_phases?: { slug: string; expected_status: string }[]
   assertions: string[]
+  cli_args?: string[]
 }
 
 interface PhaseCheckResult {
@@ -196,15 +197,18 @@ function executeScenario(
     const env = { ...process.env }
     delete env.CLAUDECODE
 
+    const args = [
+      'tsx',
+      path.join(AUTO_DEV_ROOT, 'src/index.ts'),
+      'start',
+      '--plan', planPath,
+      '--project', tempDir,
+      ...(config.cli_args ?? []),
+    ]
+
     const child = spawn(
       'npx',
-      [
-        'tsx',
-        path.join(AUTO_DEV_ROOT, 'src/index.ts'),
-        'start',
-        '--plan', planPath,
-        '--project', tempDir,
-      ],
+      args,
       {
         cwd: AUTO_DEV_ROOT,
         env,

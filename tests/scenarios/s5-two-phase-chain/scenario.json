@@ -1,0 +1,14 @@
+{
+  "name": "s5-two-phase-chain",
+  "description": "Two-phase chain: Phase 2 depends on Phase 1 output",
+  "priority": 1,
+  "timeout_minutes": 8,
+  "expected_exit_code": 0,
+  "expected_phase_count": 2,
+  "expected_all_phases_status": "completed",
+  "assertions": [
+    "setup_commands_succeeded",
+    "quality_gates_passed",
+    "verification_passed"
+  ]
+}
