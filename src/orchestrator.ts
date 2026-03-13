@@ -818,7 +818,7 @@ function displayDryRun(
         if (pattern.test(criterion)) {
           warnings.push(
             `  [warn] ${phase.slug} 标准 #${i + 1}: "${criterion}"\n` +
-              `         → 可能需要运行时验证（${hint}），验证 Session 只有 Read 权限，建议改写为代码可判断的条件`,
+              `         → 可能需要运行时验证（${hint}），验证 Session 无法执行命令，将改为检查实现完整性和测试覆盖`,
           )
           break // One warning per criterion
         }

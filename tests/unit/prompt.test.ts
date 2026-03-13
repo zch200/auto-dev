@@ -159,5 +159,31 @@ describe('prompt', () => {
       expect(prompt).toContain('/tmp/bundle/verification.json')
       expect(prompt).toContain('代码审查员')
     })
+
+    it('should mention Glob and Grep tools for code search', () => {
+      const phase = makePhase()
+
+      const prompt = buildVerificationPrompt(
+        phase,
+        '/tmp/bundle',
+        '/tmp/bundle/verification.json',
+      )
+
+      expect(prompt).toContain('Glob')
+      expect(prompt).toContain('Grep')
+    })
+
+    it('should include guidance for runtime behavior criteria', () => {
+      const phase = makePhase()
+
+      const prompt = buildVerificationPrompt(
+        phase,
+        '/tmp/bundle',
+        '/tmp/bundle/verification.json',
+      )
+
+      expect(prompt).toContain('运行时行为')
+      expect(prompt).toContain('测试覆盖')
+    })
   })
 })

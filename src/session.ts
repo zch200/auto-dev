@@ -187,7 +187,7 @@ export async function runVerificationSession(
     cwd: worktreePath,
     timeoutMs: DEFAULTS.VERIFICATION_TIMEOUT_MS,
     maxTurns: DEFAULTS.VERIFICATION_MAX_TURNS,
-    allowedTools: ['Read', 'Write', 'WebFetch', 'WebSearch'],
+    allowedTools: ['Read', 'Write', 'Glob', 'Grep', 'WebFetch', 'WebSearch'],
     env,
   })
 }

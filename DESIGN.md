@@ -313,7 +313,7 @@ claude -p “{prompt}” \
 |-------------|----------------|-------------------|-------------|------|
 | Session 0（初始化） | `Read Write WebFetch WebSearch` | — | 10 | 读取计划文档、写入 candidate 文件、可搜索参考资料 |
 | Phase 执行 | `Read Write Edit Bash Glob Grep WebFetch WebSearch` | 见下方 | `max_turns`（默认 200） | 完整的开发能力 |
-| 验证 Session | `Read Write WebFetch WebSearch` | — | 10 | 读取 verification bundle / 代码文件、写入 verification.json |
+| 验证 Session | `Read Write Glob Grep WebFetch WebSearch` | — | 10 | 读取/搜索 verification bundle 和代码文件、写入 verification.json |
 
 **Phase 执行的 disallowedTools**：
 
@@ -475,10 +475,11 @@ L1 + L2 通过
 
 **验收标准编写指导**：
 
-由于验证 session 仅有 Read 权限（不能执行命令），验收标准应描述**可从代码变更中判断**的条件：
+验证 session 具有 `Read Glob Grep` 权限，可以搜索文件和代码内容，但不能执行命令。验收标准推荐描述**可从代码变更中判断**的条件：
 
 - 推荐：「新增了 `migrations/001_add_xxx.sql` 文件」「为新接口编写了单元测试」「错误响应包含错误码和描述」
-- 避免：「migration 脚本可正常执行」「API 响应时间 < 200ms」（需运行才能验证，验证 session 会标记为 `met=false`）
+- 可接受：「服务可正常启动」等运行时标准——验证 session 会改为检查实现完整性和测试覆盖（代码已通过 L1/L2 门禁）
+- 避免：「API 响应时间 < 200ms」等需要实际度量的性能标准
 
 Session 0 提取验收标准时不做此校验——计划文档由用户编写，编排脚本不限制其内容。
 
@@ -718,7 +719,7 @@ Phase: {title} [{slug}]
 - `changed-files.json`：变更文件列表
 - `patches/*.diff`：每个变更文件的独立 patch
 
-请按需读取这些文件，并在需要时读取 worktree 中的实际代码文件。
+请按需读取这些文件。你可以使用 Glob 搜索文件、Grep 搜索代码内容，也可以直接读取 worktree 中的源码文件，以充分理解代码变更。
 
 ## 输出要求
 输出 JSON 到 {verification_path}，格式：
@@ -735,7 +736,10 @@ Phase: {title} [{slug}]
 
 ## 判断原则
 1. 只根据实际代码变更判断，不要推测或假设
-2. 如果某个标准无法从代码或 patch 中确认是否满足，标记为 `met=false`
+2. 对于涉及运行时行为的标准（如"服务可正常启动"、"API 响应正常"），你无法执行命令，请改为检查：
+   - 相关代码的实现是否完整和正确（配置、入口文件、依赖引入等）
+   - 是否有对应的测试覆盖该行为（本 phase 的代码已通过 typecheck 和 test 门禁）
+   - 如果实现完整且有测试覆盖，可视为 `met=true`
 3. overall 只有在全部 criteria 都 met 时才为 "pass"
 4. 只将结果写入 `{verification_path}`，不要修改 worktree 中的任何文件
 ```
@@ -1252,7 +1256,7 @@ auto-dev start ./testhub --plan .claude/plans/v2.1.0.md --dry-run
 
 [dry-run] 验收标准检查:
   [warn] backend-api 标准 #3: "API 响应时间 < 200ms"
-         → 可能需要运行时验证，验证 Session 只有 Read 权限，建议改写为代码可判断的条件
+         → 可能需要运行时验证，验证 Session 无法执行命令，将改为检查实现完整性和测试覆盖
 
 [dry-run] 质量门禁:
   typecheck: npx tsc --noEmit
