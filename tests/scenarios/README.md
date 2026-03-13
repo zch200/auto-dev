@@ -21,55 +21,90 @@ auto-dev 的现有测试体系（unit / integration / e2e）使用 mock Claude C
 
 1. **每个场景 1-2 个 phase**，Claude session 1-3 分钟内完成
 2. **每个场景聚焦一个测试维度**，不混杂多个问题
-3. **可重复运行** — `git reset --hard` 回初始状态即可重跑
-4. **渐进构建** — 先覆盖 4 个核心场景，再逐步扩展
+3. **Git 隔离** — seed/ 目录只存模板文件（无 .git），runner 在 `/tmp` 创建独立 git repo 运行
+4. **分层构建、分层测试** — P0 必须通过，P1/P2 逐步扩展覆盖
+5. **可重复运行** — 每次在全新临时目录运行，无残留状态
 
-## Scenario Matrix
+## Git Isolation Strategy
 
-### Priority 1 — Core Paths (先做)
+测试项目 **不能** 放在 auto-dev 仓库内作为 git repo，原因：
+- auto-dev 依赖 `git rev-parse --git-common-dir` 定位运行时目录，嵌套 repo 会导致路径混乱
+- 测试创建的 `phase/*`、`feat/*` 分支会污染 auto-dev 本身的分支空间
+- worktree 操作会在 auto-dev 的 `.git/worktrees/` 下创建条目
 
-| ID | Scenario | Project State | Plan | Tests |
-|----|----------|--------------|------|-------|
-| S1 | happy-path | 有完整 TS 项目 + tests | 单 phase: 加一个工具函数 | 正常全链路 |
-| S2 | empty-bootstrap | 空目录 | 单 phase: 初始化项目骨架 | setup tolerance, preflight skip, config refresh |
-| S3 | wrong-pm | npm 项目配了 pnpm 的 config | 单 phase: 加功能 | config refresh |
-| S4 | crash-recovery | 预置 "running" manifest | 恢复后继续 | 崩溃恢复 |
+**解决方案**：仓库内只存 seed 文件和 scenario 配置，runner 动态构建独立 git repo：
 
-### Priority 2 — Extended Coverage (后做)
+```
+仓库内（版本控制）                              运行时（临时，/tmp）
+tests/scenarios/s1-happy-path/seed/    ──复制──▶  /tmp/auto-dev-scenarios/s1-happy-path/
+  ├── package.json                                  ├── .git/          ← runner 执行 git init
+  ├── tsconfig.json                                 ├── .auto-dev.json ← runner 从 config.json 复制
+  └── src/index.ts                                  ├── package.json
+                                                    └── src/index.ts
+                                                         ↓
+                                              auto-dev start --plan ... --project /tmp/.../
+                                                         ↓
+                                                    完成后清理整个临时目录
+```
 
-| ID | Scenario | Project State | Plan | Tests |
-|----|----------|--------------|------|-------|
-| S5 | two-phase-chain | TS 项目 | 2 phase 有依赖 | phase 顺序, 产物传递 |
-| S6 | docs-only | 有代码的项目 | 只改 README | 纯文档 plan 的 gate 处理 |
-| S7 | python-project | Python 项目 | 加一个模块 | 非 Node 技术栈 |
-| S8 | retry-resume | Phase 1 done + Phase 2 failed | --retry | retry 流程 |
-| S9 | verification-fail | TS 项目 | 故意不满足验收标准 | 验证失败 → retry |
+与现有 E2E 测试的 `fs.mkdtempSync()` 模式一致，只是 seed 内容更丰富。
+
+## Test Priority Levels
+
+### P0 — Gate (必须通过，阻塞发布)
+
+核心路径，覆盖最常见的使用场景。任何一个 P0 失败都说明基本功能有问题。
+
+| ID | Scenario | Project State | Plan | Validates |
+|----|----------|--------------|------|-----------|
+| S1 | happy-path | 完整 TS 项目 + vitest | 单 phase: 加一个工具函数 | 全链路 happy path |
+| S2 | empty-bootstrap | 空目录 | 单 phase: 初始化 Node.js 项目 | setup tolerance, preflight skip, config refresh |
+
+### P1 — Core (应该通过，不阻塞但需跟踪)
+
+重要但非阻塞的场景，覆盖常见边界情况。
+
+| ID | Scenario | Project State | Plan | Validates |
+|----|----------|--------------|------|-----------|
+| S3 | wrong-pm | npm config + pnpm 项目 | 单 phase: 加功能 | config refresh 机制 |
+| S4 | crash-recovery | "running" 状态 manifest | resume | 崩溃恢复 |
+| S5 | two-phase-chain | TS 项目 | 2 phase 有依赖 | phase 顺序, 前序产物传递 |
+| S6 | retry-resume | Phase 1 done + Phase 2 failed | --retry | retry 逻辑 |
+
+### P2 — Extended (锦上添花，扩展覆盖)
+
+非核心路径，覆盖其他技术栈和特殊 plan 类型。
+
+| ID | Scenario | Project State | Plan | Validates |
+|----|----------|--------------|------|-----------|
+| S7 | docs-only | 有代码的项目 | 只改 markdown | 纯文档 plan 的 gate 处理 |
+| S8 | python-project | Python 项目 | 加一个模块 | 非 Node 技术栈检测 |
+| S9 | verification-fail | TS 项目 | 不可能满足的验收标准 | 验证失败 → retry → 最终失败 |
+| S10 | go-project | Go 项目 | 加一个 handler | Go 技术栈 |
 
 ## Directory Structure
 
 ```
 tests/scenarios/
-├── README.md               ← 本文件
-├── runner.ts               ← 场景运行器（统一的运行/清理/报告逻辑）
+├── README.md                ← 本文件
+├── runner.ts                ← 场景运行器
 ├── s1-happy-path/
-│   ├── scenario.json       ← 场景元数据（描述、预期结果、超时时间）
-│   ├── setup.sh            ← 初始化脚本（创建 git repo、安装依赖等）
-│   ├── plan.md             ← 计划文档
-│   ├── config.json         ← .auto-dev.json 内容
-│   └── seed/               ← 初始项目文件（会被 setup.sh 复制到临时目录）
+│   ├── scenario.json        ← 场景元数据
+│   ├── plan.md              ← 计划文档
+│   ├── config.json          ← .auto-dev.json 内容
+│   └── seed/                ← 初始项目文件（无 .git）
 │       ├── package.json
 │       ├── tsconfig.json
+│       ├── vitest.config.ts
 │       └── src/
+│           ├── index.ts
+│           └── index.test.ts
 ├── s2-empty-bootstrap/
 │   ├── scenario.json
-│   ├── setup.sh
 │   ├── plan.md
 │   ├── config.json
-│   └── seed/               ← 空或只有 .gitkeep
-├── s3-wrong-pm/
-│   └── ...
-└── s4-crash-recovery/
-    └── ...
+│   └── seed/                ← 空或只有 .gitkeep
+└── ...
 ```
 
 ### scenario.json Schema
@@ -78,6 +113,7 @@ tests/scenarios/
 {
   "name": "happy-path",
   "description": "完整 TypeScript 项目上的单 phase 正常流程",
+  "priority": 0,
   "timeout_minutes": 5,
   "expected_exit_code": 0,
   "expected_phases": [
@@ -94,7 +130,7 @@ tests/scenarios/
 
 ## runner.ts Responsibilities
 
-1. **Setup** — 复制 seed/ 到临时目录，初始化 git repo，写入 config
+1. **Setup** — 复制 seed/ 到 `/tmp/auto-dev-scenarios/{name}/`，`git init` + initial commit，写入 .auto-dev.json
 2. **Execute** — `env -u CLAUDECODE npx tsx src/index.ts start --plan ...` with timeout
 3. **Collect** — 读取 manifest、orchestrator.log、exit code
 4. **Assert** — 比对 scenario.json 中的预期
@@ -107,23 +143,24 @@ tests/scenarios/
 # 运行单个场景
 npx tsx tests/scenarios/runner.ts s1-happy-path
 
+# 按优先级运行
+npx tsx tests/scenarios/runner.ts --p0          # 只跑 P0（gate 测试）
+npx tsx tests/scenarios/runner.ts --p0 --p1     # 跑 P0 + P1
+
 # 运行所有场景
 npx tsx tests/scenarios/runner.ts --all
-
-# 运行 Priority 1 场景
-npx tsx tests/scenarios/runner.ts --priority 1
 ```
 
 ## Iteration History
 
 | Date | Change | Trigger |
 |------|--------|---------|
-| 2026-03-13 | 创建框架文档 | redbook 实战测试暴露 3 个 mock 未覆盖的问题 |
+| 2026-03-13 | 创建框架文档，定义分级策略 | redbook 实战测试暴露 3 个 mock 未覆盖的问题 |
 
 ## Next Steps
 
-- [ ] 构建 S1 (happy-path) — 最简单的场景，验证 runner 框架可用
-- [ ] 构建 S2 (empty-bootstrap) — 验证首次运行的 3 个修复
-- [ ] 构建 S3 (wrong-pm) — 验证 config refresh
-- [ ] 构建 S4 (crash-recovery) — 验证崩溃恢复
-- [ ] 实现 runner.ts — 统一的运行/清理/报告逻辑
+- [ ] 实现 runner.ts 框架
+- [ ] 构建 S1 (happy-path) — P0，验证 runner + 全链路
+- [ ] 构建 S2 (empty-bootstrap) — P0，验证 bootstrap 修复
+- [ ] 构建 S3-S4 — P1，验证 config refresh + crash recovery
+- [ ] CI 集成考虑（P0 作为 PR gate，P1 nightly）
