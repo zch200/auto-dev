@@ -757,6 +757,13 @@ function handlePhaseFailure(
 
   phase.last_error = error
 
+  // If phase failed before entering 'running' state (e.g. setup command failure,
+  // worktree creation failure), attempts hasn't been incremented yet — do it now
+  // so the retry counter advances and we don't loop forever.
+  if (phase.status !== 'running') {
+    phase.attempts++
+  }
+
   if (phase.attempts < manifest.max_attempts_per_phase) {
     // Can retry — reset and clean up
     phase.status = 'pending'

@@ -314,6 +314,41 @@ describe('orchestrator E2E', () => {
     expect(manifest!.phases[1].status).toBe('completed')
   }, 30_000)
 
+  it('should fail after max attempts when setup command fails', async () => {
+    repo = setupRepo()
+    // Override config with a failing setup command
+    repo.writeFile(
+      '.auto-dev.json',
+      JSON.stringify({
+        base_branch: 'main',
+        quality_gate: { typecheck: 'true', test: 'true' },
+        setup_commands: ['false'],  // always fails with exit 1
+        session_timeout_minutes: 1,
+        setup_timeout_minutes: 1,
+        gate_timeout_minutes: 1,
+        max_attempts_per_phase: 2,
+      }),
+    )
+    repo.git('add', '.auto-dev.json')
+    repo.git('commit', '-m', 'config with failing setup')
+
+    mock = createMockClaudeWithSequence([
+      'ok',                // preflight
+      'session0-success',  // Session 0
+      // No phase execution — setup fails before Claude session starts
+    ])
+    originalPath = injectMockPath(mock.dir)
+
+    const exitCode = await orchestrate(makeCliArgs(repo))
+
+    expect(exitCode).toBe(EXIT_CODES.PHASE_FAILED)
+
+    const manifest = readManifest(paths.manifestPath(repo.dir, 'test-plan'))
+    expect(manifest!.phases[0].status).toBe('failed')
+    expect(manifest!.phases[0].attempts).toBe(2)
+    expect(manifest!.phases[0].last_error).toContain('Setup command failed')
+  }, 30_000)
+
   it('should return correct exit code on config error', async () => {
     repo = createTempGitRepo()
     repo.writeFile('init.txt', 'init')
