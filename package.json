@@ -1,12 +1,17 @@
 {
-  "name": "auto-dev",
+  "name": "auto-dev-cc",
   "version": "0.1.0",
   "description": "Automated development orchestration tool based on Claude Code Headless Mode + Git Worktree",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "auto-dev": "dist/index.js"
+    "auto-dev-cc": "dist/index.js"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "start": "tsx src/index.ts",
@@ -15,7 +20,29 @@
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
     "test:e2e": "vitest run tests/e2e",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "claude-code",
+    "automation",
+    "git-worktree",
+    "orchestration",
+    "developer-tools",
+    "headless",
+    "quality-gate"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zch200/auto-dev.git"
+  },
+  "bugs": {
+    "url": "https://github.com/zch200/auto-dev/issues"
+  },
+  "homepage": "https://github.com/zch200/auto-dev#readme",
+  "engines": {
+    "node": ">=18"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
