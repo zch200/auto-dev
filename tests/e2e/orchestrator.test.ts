@@ -212,10 +212,31 @@ describe('orchestrator E2E', () => {
     // Verify no feature branch was created
     expect(() => repo.git('rev-parse', '--verify', 'refs/heads/feat/test-plan')).toThrow()
 
-    // Verify manifest was created (for display) but feature branch not created
+    // Verify manifest was cleaned up (dry-run is side-effect-free)
     const manifest = readManifest(paths.manifestPath(repo.dir, 'test-plan'))
-    expect(manifest).not.toBeNull()
-    expect(manifest!.phases[0].status).toBe('pending')
+    expect(manifest).toBeNull()
+  }, 30_000)
+
+  it('should allow multiple dry-runs without state conflict', async () => {
+    repo = setupRepo()
+
+    // First dry-run
+    mock = createMockClaudeWithSequence(['session0-success'])
+    originalPath = injectMockPath(mock.dir)
+    let exitCode = await orchestrate(makeCliArgs(repo, { dryRun: true }))
+    expect(exitCode).toBe(EXIT_CODES.SUCCESS)
+    mock.cleanup()
+
+    // Second dry-run — should work without --reset
+    mock = createMockClaudeWithSequence(['session0-success'])
+    process.env.PATH = `${mock.dir}:${originalPath}`
+    exitCode = await orchestrate(makeCliArgs(repo, { dryRun: true }))
+    expect(exitCode).toBe(EXIT_CODES.SUCCESS)
+
+    // Still no leftover state
+    const manifest = readManifest(paths.manifestPath(repo.dir, 'test-plan'))
+    expect(manifest).toBeNull()
+    expect(() => repo.git('rev-parse', '--verify', 'refs/heads/feat/test-plan')).toThrow()
   }, 30_000)
 
   it('should handle --reset then start fresh', async () => {

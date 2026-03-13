@@ -141,6 +141,7 @@ export async function orchestrate(args: CliArgs): Promise<number> {
 
         if (dryRun) {
           displayDryRun(manifest, resolved)
+          cleanupDryRun(projectRoot, planId)
           return EXIT_CODES.SUCCESS
         }
 
@@ -789,6 +790,17 @@ function handlePhaseFailure(
     `Phase ${phase.slug} 连续 ${manifest.max_attempts_per_phase} 次失败`,
   )
   return 'max-attempts-reached'
+}
+
+/**
+ * Clean up manifest and candidate created during dry-run so that
+ * subsequent commands don't see stale state (dry-run is side-effect-free).
+ */
+function cleanupDryRun(projectRoot: string, planId: string): void {
+  deleteManifest(paths.manifestPath(projectRoot, planId))
+  try {
+    fs.unlinkSync(paths.candidatePath(projectRoot, planId))
+  } catch { /* may not exist */ }
 }
 
 /**
