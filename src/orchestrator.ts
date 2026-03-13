@@ -58,7 +58,7 @@ export async function orchestrate(args: CliArgs): Promise<number> {
   // 1. Validate config exists
   let config
   try {
-    config = loadConfig(projectRoot)
+    config = await loadConfig(projectRoot)
   } catch (err) {
     if (err instanceof ConfigError) {
       logger.error(err.message)
@@ -88,7 +88,7 @@ export async function orchestrate(args: CliArgs): Promise<number> {
   let manifest: Manifest | null = null
   if (retry) {
     try {
-      manifest = executeRetry(projectRoot, planId, planDocPath)
+      manifest = await executeRetry(projectRoot, planId, planDocPath)
     } catch (err) {
       if (err instanceof RetryError) {
         logger.error(err.message)

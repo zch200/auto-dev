@@ -1,5 +1,6 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import * as readline from 'node:readline'
 import { execFileSync } from 'node:child_process'
 import type { ProjectConfig, QualityGate } from './types.js'
 import { DEFAULTS } from './types.js'
@@ -168,7 +169,7 @@ interface TechStackDetection {
 /**
  * Detect the project's tech stack and generate appropriate quality_gate / setup_commands.
  */
-export function detectTechStack(projectRoot: string): TechStackDetection {
+export function detectTechStack(projectRoot: string): TechStackDetection | null {
   const exists = (f: string) => fs.existsSync(path.join(projectRoot, f))
 
   // Node.js / TypeScript
@@ -246,9 +247,104 @@ export function detectTechStack(projectRoot: string): TechStackDetection {
     }
   }
 
-  // Fallback — cannot detect, throw to let user create manually
+  // Fallback — cannot detect
+  return null
+}
+
+interface StackPreset {
+  label: string
+  quality_gate: QualityGate
+  setup_commands: string[]
+}
+
+const STACK_PRESETS: StackPreset[] = [
+  {
+    label: 'Node.js / TypeScript',
+    quality_gate: { typecheck: 'npx tsc --noEmit', test: 'npm test' },
+    setup_commands: ['npm ci'],
+  },
+  {
+    label: 'Python',
+    quality_gate: { typecheck: 'mypy .', test: 'pytest' },
+    setup_commands: ['pip install -r requirements.txt'],
+  },
+  {
+    label: 'Go',
+    quality_gate: { typecheck: 'go vet ./...', test: 'go test ./...' },
+    setup_commands: [],
+  },
+  {
+    label: 'Rust',
+    quality_gate: { typecheck: 'cargo check', test: 'cargo test' },
+    setup_commands: [],
+  },
+]
+
+function promptUser(question: string): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stderr,
+  })
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close()
+      resolve(answer.trim())
+    })
+  })
+}
+
+/**
+ * Interactive tech stack selection when auto-detection fails.
+ */
+export async function interactiveStackSelect(
+  projectRoot: string,
+  baseBranch: string,
+): Promise<ProjectConfig> {
+  const configPath = path.join(projectRoot, '.auto-dev.json')
+
+  // Non-interactive environment (piped stdin, CI, tests) — cannot prompt
+  if (!process.stdin.isTTY) {
+    throw new ConfigError(
+      '无法自动检测项目技术栈，请手动创建 .auto-dev.json 配置文件。',
+    )
+  }
+
+  console.error('\n未检测到已知技术栈，请选择项目类型:\n')
+  for (let i = 0; i < STACK_PRESETS.length; i++) {
+    console.error(`  ${i + 1}) ${STACK_PRESETS[i].label}`)
+  }
+  console.error(`  ${STACK_PRESETS.length + 1}) 其他（生成模板，自行编辑）`)
+  console.error('')
+
+  const answer = await promptUser(`请输入选项 [1-${STACK_PRESETS.length + 1}]: `)
+  const choice = parseInt(answer, 10)
+
+  if (choice >= 1 && choice <= STACK_PRESETS.length) {
+    const preset = STACK_PRESETS[choice - 1]
+    const config: ProjectConfig = {
+      base_branch: baseBranch,
+      quality_gate: preset.quality_gate,
+    }
+    if (preset.setup_commands.length > 0) {
+      config.setup_commands = preset.setup_commands
+    }
+
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n', 'utf-8')
+    logger.info(`已创建配置文件 (${preset.label}): ${configPath}`)
+    return config
+  }
+
+  // "其他" or invalid input — generate template
+  const template: ProjectConfig = {
+    base_branch: baseBranch,
+    quality_gate: { typecheck: 'echo TODO', test: 'echo TODO' },
+    setup_commands: [],
+  }
+  fs.writeFileSync(configPath, JSON.stringify(template, null, 2) + '\n', 'utf-8')
+  logger.info(`已创建模板配置文件: ${configPath}`)
+  logger.info('请编辑 .auto-dev.json 中的 quality_gate 命令，然后重新运行。')
   throw new ConfigError(
-    '无法自动检测项目技术栈，请手动创建 .auto-dev.json 配置文件。',
+    `请编辑 ${configPath} 填入实际的质量门禁命令后重新运行。`,
   )
 }
 
@@ -256,9 +352,15 @@ export function detectTechStack(projectRoot: string): TechStackDetection {
  * Auto-detect tech stack and create .auto-dev.json in the project root.
  * Returns the generated config.
  */
-export function autoCreateConfig(projectRoot: string): ProjectConfig {
+export async function autoCreateConfig(projectRoot: string): Promise<ProjectConfig> {
   const baseBranch = detectBaseBranch(projectRoot)
-  const { quality_gate, setup_commands } = detectTechStack(projectRoot)
+  const detected = detectTechStack(projectRoot)
+
+  if (!detected) {
+    return interactiveStackSelect(projectRoot, baseBranch)
+  }
+
+  const { quality_gate, setup_commands } = detected
 
   const config: ProjectConfig = {
     base_branch: baseBranch,
@@ -286,7 +388,7 @@ export function autoCreateConfig(projectRoot: string): ProjectConfig {
   return config
 }
 
-export function loadConfig(projectRoot: string): ProjectConfig {
+export async function loadConfig(projectRoot: string): Promise<ProjectConfig> {
   const configPath = path.join(projectRoot, '.auto-dev.json')
 
   if (!fs.existsSync(configPath)) {

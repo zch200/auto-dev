@@ -110,7 +110,7 @@ describe('config', () => {
   })
 
   describe('loadConfig', () => {
-    it('should load from project root', () => {
+    it('should load from project root', async () => {
       tmpDir = createTempDir()
       tmpDir.writeFile(
         '.auto-dev.json',
@@ -119,11 +119,11 @@ describe('config', () => {
           quality_gate: { test: 'npm test' },
         }),
       )
-      const config = loadConfig(tmpDir.dir)
+      const config = await loadConfig(tmpDir.dir)
       expect(config.base_branch).toBe('dev')
     })
 
-    it('should auto-create config when missing in a git repo with package.json', () => {
+    it('should auto-create config when missing in a git repo with package.json', async () => {
       let repo: TempGitRepo | null = null
       try {
         repo = createTempGitRepo()
@@ -133,7 +133,7 @@ describe('config', () => {
           JSON.stringify({ name: 'test', scripts: { test: 'vitest run' } }),
         )
         fs.writeFileSync(path.join(repo.dir, 'tsconfig.json'), '{}')
-        const config = loadConfig(repo.dir)
+        const config = await loadConfig(repo.dir)
         expect(config.base_branch).toBe('main')
         expect(config.quality_gate.typecheck).toBe('npx tsc --noEmit')
         expect(config.quality_gate.test).toBe('npm test')
@@ -144,10 +144,10 @@ describe('config', () => {
       }
     })
 
-    it('should throw on invalid JSON', () => {
+    it('should throw on invalid JSON', async () => {
       tmpDir = createTempDir()
       tmpDir.writeFile('.auto-dev.json', '{invalid json}')
-      expect(() => loadConfig(tmpDir!.dir)).toThrow('JSON 解析失败')
+      await expect(loadConfig(tmpDir!.dir)).rejects.toThrow('JSON 解析失败')
     })
   })
 
@@ -230,14 +230,14 @@ describe('config', () => {
       expect(result.quality_gate.test).toBe('pytest')
     })
 
-    it('should throw for unrecognized project', () => {
+    it('should return null for unrecognized project', () => {
       tmpDir = createTempDir()
-      expect(() => detectTechStack(tmpDir!.dir)).toThrow('无法自动检测')
+      expect(detectTechStack(tmpDir!.dir)).toBeNull()
     })
   })
 
   describe('autoCreateConfig', () => {
-    it('should create .auto-dev.json and detect base branch', () => {
+    it('should create .auto-dev.json and detect base branch', async () => {
       let repo: TempGitRepo | null = null
       try {
         repo = createTempGitRepo()
@@ -245,7 +245,7 @@ describe('config', () => {
           path.join(repo.dir, 'package.json'),
           JSON.stringify({ name: 'test', scripts: { test: 'jest' } }),
         )
-        const config = autoCreateConfig(repo.dir)
+        const config = await autoCreateConfig(repo.dir)
         expect(config.base_branch).toBe('main')
         expect(config.quality_gate.test).toBe('npm test')
 
@@ -256,7 +256,7 @@ describe('config', () => {
       }
     })
 
-    it('should detect dev branch when it exists', () => {
+    it('should detect dev branch when it exists', async () => {
       let repo: TempGitRepo | null = null
       try {
         repo = createTempGitRepo()
@@ -271,7 +271,7 @@ describe('config', () => {
           JSON.stringify({ name: 'test' }),
         )
         fs.writeFileSync(path.join(repo.dir, 'tsconfig.json'), '{}')
-        const config = autoCreateConfig(repo.dir)
+        const config = await autoCreateConfig(repo.dir)
         // 'main' comes first in detection order, so it should still be 'main'
         expect(config.base_branch).toBe('main')
       } finally {

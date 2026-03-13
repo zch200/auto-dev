@@ -33,11 +33,11 @@ export function computeFileHash(filePath: string): string {
  *
  * Returns the updated manifest ready for execution.
  */
-export function executeRetry(
+export async function executeRetry(
   projectRoot: string,
   planId: string,
   planDocPath: string,
-): Manifest {
+): Promise<Manifest> {
   const manifestFilePath = paths.manifestPath(projectRoot, planId)
   const manifest = readManifest(manifestFilePath)
 
@@ -79,7 +79,7 @@ export function executeRetry(
   }
 
   // 4. Refresh non-phase config from current .auto-dev.json
-  const config = loadConfig(projectRoot)
+  const config = await loadConfig(projectRoot)
   const resolved = applyDefaults(config)
 
   manifest.quality_gate = resolved.quality_gate

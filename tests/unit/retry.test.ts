@@ -83,7 +83,7 @@ describe('retry', () => {
   })
 
   describe('executeRetry', () => {
-    it('should throw when manifest does not exist', () => {
+    it('should throw when manifest does not exist', async () => {
       repo = createTempGitRepo()
       repo.writeFile('init.txt', 'init')
       repo.git('add', '-A')
@@ -91,16 +91,16 @@ describe('retry', () => {
 
       repo.writeFile('.claude/plans/test-plan.md', planDocContent)
 
-      expect(() =>
+      await expect(
         executeRetry(
           repo.dir,
           'test-plan',
           path.join(repo.dir, '.claude/plans/test-plan.md'),
         ),
-      ).toThrow(/manifest 不存在/)
+      ).rejects.toThrow(/manifest 不存在/)
     })
 
-    it('should throw when plan doc hash has changed', () => {
+    it('should throw when plan doc hash has changed', async () => {
       repo = createTempGitRepo()
       repo.writeFile('init.txt', 'init')
       repo.git('add', '-A')
@@ -128,12 +128,12 @@ describe('retry', () => {
         }),
       )
 
-      expect(() => executeRetry(repo.dir, 'test-plan', planPath)).toThrow(
+      await expect(executeRetry(repo.dir, 'test-plan', planPath)).rejects.toThrow(
         /plan_doc_hash 不匹配/,
       )
     })
 
-    it('should reset failed phases and refresh config when hash matches', () => {
+    it('should reset failed phases and refresh config when hash matches', async () => {
       repo = createTempGitRepo()
       repo.writeFile('init.txt', 'init')
       repo.git('add', '-A')
@@ -182,7 +182,7 @@ describe('retry', () => {
       fs.mkdirSync(path.dirname(manifestFile), { recursive: true })
       atomicWriteManifest(manifestFile, manifest)
 
-      const result = executeRetry(repo.dir, 'test-plan', planPath)
+      const result = await executeRetry(repo.dir, 'test-plan', planPath)
 
       // Completed phase should remain completed
       expect(result.phases[0].status).toBe('completed')
